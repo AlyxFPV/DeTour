@@ -4,6 +4,8 @@ You either name a place and choose *how* you get there, or you name nothing and 
 
 ---
 
+https://alyxfpv.github.io/DeTour/
+
 ## The file
 
 ### `DeTour.html`
