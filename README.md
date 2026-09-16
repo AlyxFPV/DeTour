@@ -1,6 +1,19 @@
-# DeTour
+<p align="center">
+  <img src="docs/logo.png" alt="DeTour logo" width="160">
+</p>
+
+<h1 align="center">DeTour</h1>
+
+<p align="center"><a href="https://alyxfpv.github.io/DeTour/"><b>Open the app</b></a></p>
 
 You either name a place and choose *how* you get there, or you name nothing and the app invents a ride that brings you home. Either way the finished route is handed to the navigation app you already use.
+
+<p align="center">
+  <img src="docs/screenshots/home.png" alt="Start screen: map and Surprise me button" width="250">
+  <img src="docs/screenshots/routes.png" alt="Three ways to Haapsalu: Road Runner, Explorer, Outlaw" width="250">
+  <img src="docs/screenshots/surprise-loop.png" alt="A 1 h 30 surprise loop that returns to the start" width="250">
+</p>
+
 
 ---
 
