@@ -4739,6 +4739,7 @@ function setNavFollowing(v){
 const NAV_TILT_DEG = 50;   // a real fly-over rake, camera looking down the road ahead
 let navManualRotOffset = 0;
 let navRotateGesture = null;   // {startAngle, startOffset, startDist, startZoom} while two fingers are down
+let navPanGesture = null;      // {lastX, lastY} while exactly one finger is down
 function touchAngleDeg(t0, t1){
   return Math.atan2(t1.clientY - t0.clientY, t1.clientX - t0.clientX) * 180 / Math.PI;
 }
@@ -4749,6 +4750,7 @@ function onNavTouchStart(e){
   if(state !== 'nav') return;
   if(e.touches.length === 2){
     setNavFollowing(false);
+    navPanGesture = null;
     navRotateGesture = {
       startAngle:touchAngleDeg(e.touches[0], e.touches[1]), startOffset:navManualRotOffset,
       startDist:touchDist(e.touches[0], e.touches[1]), startZoom:map.getZoom()
@@ -4758,24 +4760,59 @@ function onNavTouchStart(e){
        haywire during nav, so drive zoom ourselves from the raw touch
        points instead and keep its native handler out of the way */
     map.touchZoom.disable();
+  } else if(e.touches.length === 1){
+    setNavFollowing(false);
+    navRotateGesture = null;
+    navPanGesture = {lastX:e.touches[0].clientX, lastY:e.touches[0].clientY};
+    /* same underlying issue as the pinch handler above: Leaflet's own
+       one-finger dragging has no idea the view is currently rotated, so
+       a straight up-screen swipe ends up panning sideways once the map
+       has been rotated away from north-up. Drive single-finger panning
+       ourselves too, undoing the view's current rotation on the raw
+       touch delta before it ever reaches Leaflet. */
+    map.dragging.disable();
   } else {
     navRotateGesture = null;
+    navPanGesture = null;
   }
 }
 function onNavTouchMove(e){
-  if(state !== 'nav' || !navRotateGesture || e.touches.length !== 2) return;
-  const angle = touchAngleDeg(e.touches[0], e.touches[1]);
-  navManualRotOffset = navRotateGesture.startOffset + (angle - navRotateGesture.startAngle);
-  const dist = touchDist(e.touches[0], e.touches[1]);
-  const ratio = Math.max(dist, 1) / Math.max(navRotateGesture.startDist, 1);
-  const zoom = Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), navRotateGesture.startZoom + Math.log2(ratio)));
-  map.setZoom(zoom, {animate:false});
-  applyMapRotation(navLastHeading);
+  if(state !== 'nav') return;
+  if(navRotateGesture && e.touches.length === 2){
+    const angle = touchAngleDeg(e.touches[0], e.touches[1]);
+    navManualRotOffset = navRotateGesture.startOffset + (angle - navRotateGesture.startAngle);
+    const dist = touchDist(e.touches[0], e.touches[1]);
+    const ratio = Math.max(dist, 1) / Math.max(navRotateGesture.startDist, 1);
+    const zoom = Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), navRotateGesture.startZoom + Math.log2(ratio)));
+    map.setZoom(zoom, {animate:false});
+    applyMapRotation(navLastHeading);
+    return;
+  }
+  if(navPanGesture && e.touches.length === 1){
+    const touch = e.touches[0];
+    const dx = touch.clientX - navPanGesture.lastX;
+    const dy = touch.clientY - navPanGesture.lastY;
+    navPanGesture.lastX = touch.clientX;
+    navPanGesture.lastY = touch.clientY;
+    // un-rotate the on-screen drag delta back into the map's own
+    // (unrotated) pixel space, the same way applyMapRotation derives
+    // the view's current rotation, then hand Leaflet a delta it can
+    // pan by correctly regardless of how the view is currently turned
+    const rad = navRotationDeg(navLastHeading) * Math.PI / 180;
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+    const mapDx = dx * cos + dy * sin;
+    const mapDy = dy * cos - dx * sin;
+    map.panBy([-mapDx, -mapDy], {animate:false});
+  }
 }
 function onNavTouchEnd(e){
   if(e.touches.length < 2){
     navRotateGesture = null;
     map.touchZoom.enable();
+  }
+  if(e.touches.length < 1){
+    navPanGesture = null;
+    map.dragging.enable();
   }
 }
 function navRotationDeg(heading){
