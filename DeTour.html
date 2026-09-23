@@ -2709,7 +2709,7 @@ function syncLabels(){
 
 function initMap(){
   map = L.map('map', {
-    zoomControl:false, attributionControl:true,
+    zoomControl:false, attributionControl:true, zoomSnap:0,
     center:[59.4370, 24.7536], zoom:12, worldCopyJump:true
   });
   map.attributionControl.setPrefix('');
