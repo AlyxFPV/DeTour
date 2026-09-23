@@ -2585,9 +2585,12 @@ function reverseGeocode(p){
 /* ============================================================
    2. map
    ============================================================ */
+// CARTO retired anonymous basemap access — a free key is required now,
+// even on their non-commercial tier (5M requests/month, no card)
+const CARTO_API_KEY = "cb1_3vju_1_0665884b4d087d273ba458c7";
 const TILES = {
-  light: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-  dark:  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  light: `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`,
+  dark:  `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`,
   sat:   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 };
 /* draped over the satellite imagery so streets still carry names — roads first,
