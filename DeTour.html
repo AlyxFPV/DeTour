@@ -1397,9 +1397,6 @@ h1{
 
   <div class="busy" id="busy"><span class="sp"></span><span id="busyText">Working</span></div>
 
-  <button class="fab" id="btnLayers" aria-label="Map style — satellite">
-    <svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-  </button>
   <button class="fab" id="btnCenter" aria-label="Centre on me">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><circle cx="12" cy="12" r="7.6"/><path d="M12 1.6v3M12 19.4v3M22.4 12h-3M4.6 12h-3"/></svg>
   </button>
@@ -2586,14 +2583,7 @@ function reverseGeocode(p){
    2. map
    ============================================================ */
 const TILES = {
-  light: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-  // CARTO's Dark Matter basemap — a muted dark canvas so the map doesn't
-  // glow like a flashlight at night. Rendered from OpenStreetMap data, so
-  // (unlike Esri's Dark Gray Canvas, used here before) it has real
-  // street-level tiles everywhere, not just in a handful of named regions —
-  // that gap is what left the nav screen blank outside those regions.
-  dark:  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  sat:   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+  sat: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 };
 /* draped over the satellite imagery so streets still carry names — roads first,
    then place/water/boundary labels on top of those */
@@ -2601,16 +2591,13 @@ const SAT_LABEL_URLS = [
   "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
   "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
 ];
-const ATTRIB_OSM = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-const ATTRIB_DARK = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 const ATTRIB_SAT = 'Imagery &copy; <a href="https://www.esri.com">Esri</a> — Esri, Maxar, Earthstar Geographics, and the GIS community';
 
 let map, tileLayer, meMarker, destMarker, navMeMarker;
 let labelLayers = [];
 let routeLayers = [];
-/* street (light/dark, following system) or satellite imagery — a plain toggle,
-   restored from localStorage before the map is first built */
-let mapStyle = 'street';
+/* only satellite imagery is offered right now */
+let mapStyle = 'sat';
 
 /* Appearance: dark / light / auto. "Auto" prefers real sunrise/sunset at
    wherever the rider actually is (a route-planning app almost always knows
@@ -2679,10 +2666,9 @@ function isDark(){
 }
 function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 
-// satellite is a genuinely different source; street tiles swap to a dark
-// basemap at night so the map doesn't blind the rider
-function tileUrlFor(style){ return style === 'sat' ? TILES.sat : (isDark() ? TILES.dark : TILES.light); }
-function attribFor(style){ return style === 'sat' ? ATTRIB_SAT : (isDark() ? ATTRIB_DARK : ATTRIB_OSM); }
+// only satellite is offered right now, so these ignore the style argument
+function tileUrlFor(style){ return TILES.sat; }
+function attribFor(style){ return ATTRIB_SAT; }
 
 let currentAttrib = null;
 // keeps the attribution control's text in sync with whichever tile source is
@@ -3490,7 +3476,6 @@ function applyStaticText(){
   el('gpsChip').setAttribute('aria-label', t('locationStatus'));
   el('gpsText').textContent = t('gpsOff');
   el('btnSettings').setAttribute('aria-label', t('settings'));
-  el('btnLayers').setAttribute('aria-label', t('mapStyle'));
   el('btnCenter').setAttribute('aria-label', t('centreOnMe'));
   el('q').setAttribute('placeholder', t('searchPlaceholder'));
   el('q').setAttribute('aria-label', t('searchAria'));
@@ -3576,7 +3561,6 @@ function setLang(newLang){
 function positionOverlays(){
   sheetPx = el('sheet').getBoundingClientRect().height;
   el('btnCenter').style.bottom = (sheetPx + 34) + "px";
-  el('btnLayers').style.bottom = (sheetPx + 34 + (42+10)) + "px";
   const at = document.querySelector('.leaflet-control-attribution');
   if(at) at.style.marginBottom = (sheetPx + 2) + "px";
 }
@@ -5106,13 +5090,6 @@ applyThemeMode();
 document.querySelectorAll('.thmbtn').forEach(b => { b.onclick = () => setThemeMode(b.dataset.theme); });
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if(themeMode === 'auto') applyThemeMode(); });
 setInterval(() => { if(themeMode === 'auto') applyThemeMode(); }, 5*60*1000);
-
-try{
-  const savedStyle = localStorage.getItem('detour-map-style');
-  if(savedStyle === 'sat') mapStyle = 'sat';
-}catch(err){}
-el('btnLayers').classList.toggle('on', mapStyle === 'sat');
-el('btnLayers').onclick = () => setMapStyle(mapStyle === 'sat' ? 'street' : 'sat');
 
 el('btnCenter').onclick = () => {
   if(!start){ openOriginModal(); return; }
