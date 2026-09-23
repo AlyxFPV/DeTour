@@ -765,6 +765,12 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 }
 .mk-fuel svg{width:13px;height:13px;stroke:#fff;fill:none;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
 
+.fuelpopup-name{font-weight:600; margin-bottom:8px}
+.fuelpopup-btn{
+  display:block; width:100%; border:none; border-radius:8px; padding:8px 12px;
+  background:var(--hi); color:#fff; font-weight:600; font-size:13px; cursor:pointer;
+}
+
 /* ---------- top bar ---------- */
 .topbar{
   position:absolute; top:0; left:0; right:0; z-index:500;
@@ -1695,6 +1701,7 @@ en: {
   appDetourNav: "DeTour Navigation (Beta)",
   noteBuiltIn: "No hand-off needed",
   compassDenied: "Turn on Motion & Orientation Access in Settings → Safari to let the map face the way you're pointed while stopped.",
+  fuelRouteHere: "Route here",
   appGoogleMaps: "Google Maps",
   appWaze: "Waze",
   appAppleMaps: "Apple Maps",
@@ -1926,6 +1933,7 @@ ru: {
   appDetourNav: "Навигация DeTour (бета)",
   noteBuiltIn: "Передавать никуда не нужно",
   compassDenied: "Включите доступ к движению и ориентации в Настройки → Safari, чтобы карта поворачивалась по вашей стороне на месте.",
+  fuelRouteHere: "Проложить сюда",
   appGoogleMaps: "Google Maps",
   appWaze: "Waze",
   appAppleMaps: "Apple Maps",
@@ -2157,6 +2165,7 @@ et: {
   appDetourNav: "DeTour Navigatsioon (Beta)",
   noteBuiltIn: "Üleandmist pole vaja",
   compassDenied: "Luba Seaded → Safari alt liikumis- ja suunaandmete juurdepääs, et kaart paigal seistes sinu poole pöörak.",
+  fuelRouteHere: "Sõida siia",
   appGoogleMaps: "Google Maps",
   appWaze: "Waze",
   appAppleMaps: "Apple Maps",
@@ -2853,8 +2862,17 @@ async function fetchFuel(bounds){
       if(e.type !== 'node' || fuelSeen.has(e.id)) continue;
       const tags = e.tags || {};
       const name = tags.brand || tags.name || 'Fuel station';
-      const m = L.marker([e.lat, e.lon], {icon:fuelIcon(), zIndexOffset:100, keyboard:false})
-        .bindPopup(esc(name));
+      const m = L.marker([e.lat, e.lon], {icon:fuelIcon(), zIndexOffset:100, keyboard:false});
+      m.bindPopup(
+        `<div class="fuelpopup"><div class="fuelpopup-name">${esc(name)}</div>`
+        + `<button class="fuelpopup-btn" type="button">${esc(t('fuelRouteHere'))}</button></div>`
+      );
+      // the popup's own DOM only exists while it's open, so wire the
+      // button's click each time it opens rather than once up front
+      m.on('popupopen', () => {
+        const btn = document.querySelector('.leaflet-popup .fuelpopup-btn');
+        if(btn) btn.onclick = () => routeToFuel(e.lat, e.lon, name);
+      });
       fuelSeen.set(e.id, m);
       m.addTo(fuelLayer);
     }
@@ -2870,6 +2888,15 @@ function maybeFetchFuel(){
   const b = map.getBounds().pad(0.25);
   if(fuelCovered && fuelCovered.contains(b)) return;
   fetchFuel(b);
+}
+function routeToFuel(lat, lon, name){
+  map.closePopup();
+  const p = {lat, lon};
+  if(!start){ setStart(p, 'manual'); return; }
+  dest = {lat, lon, label:name, context:null};
+  placeDest(dest);
+  computeOptions();
+  if(state === 'options'){ setSearchLabel(dest.label); renderSheet(); }
 }
 
 /* ============================================================
