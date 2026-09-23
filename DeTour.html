@@ -1255,12 +1255,9 @@ h1{
 }
 .navbanner .nx svg{width:15px;height:15px;stroke:var(--ink2);fill:none;stroke-width:2.3;stroke-linecap:round}
 
-.navarrow{
-  display:none; position:absolute; left:50%; top:50%; z-index:550;
-  width:44px; height:44px; margin:-22px 0 0 -22px; pointer-events:none;
-}
-#phone.nav-on .navarrow{display:block}
-.navarrow svg{width:100%;height:100%; filter:drop-shadow(0 3px 8px rgba(10,14,10,.4))}
+.navme{width:44px; height:44px; pointer-events:none}
+.navme-rot{width:100%; height:100%; transition:transform .12s linear}
+.navme-rot svg{width:100%;height:100%; filter:drop-shadow(0 3px 8px rgba(10,14,10,.4))}
 
 .compass{
   display:none; position:absolute; z-index:600;
@@ -1347,14 +1344,6 @@ h1{
     <button class="nx" id="btnNavExit" aria-label="End navigation" type="button">
       <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
     </button>
-  </div>
-
-  <div class="navarrow" id="navArrow">
-    <svg viewBox="0 0 44 44">
-      <rect x="19" y="13" width="6" height="18" rx="3" fill="var(--hi)"/>
-      <circle cx="22" cy="10.5" r="7" fill="var(--hi)" stroke="#fff" stroke-width="2.2"/>
-      <circle cx="22" cy="33.5" r="7" fill="var(--hi)" stroke="#fff" stroke-width="2.2"/>
-    </svg>
   </div>
 
   <button class="compass" id="btnCompass" aria-label="Compass — tap to face north" type="button">
@@ -2617,7 +2606,7 @@ const ATTRIB_OSM = '&copy; <a href="https://www.openstreetmap.org/copyright">Ope
 const ATTRIB_DARK = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 const ATTRIB_SAT = 'Imagery &copy; <a href="https://www.esri.com">Esri</a> — Esri, Maxar, Earthstar Geographics, and the GIS community';
 
-let map, tileLayer, meMarker, destMarker;
+let map, tileLayer, meMarker, destMarker, navMeMarker;
 let labelLayers = [];
 let routeLayers = [];
 /* street (light/dark, following system) or satellite imagery — a plain toggle,
@@ -2784,6 +2773,17 @@ function placeDest(p){
   if(destMarker) destMarker.remove();
   if(!p) return;
   destMarker = L.marker([p.lat, p.lon], {icon:pinIcon(), interactive:false, zIndexOffset:500}).addTo(map);
+}
+function navMeIcon(){
+  return L.divIcon({
+    className:'',
+    html:'<div class="navme"><div class="navme-rot"><svg viewBox="0 0 44 44">'
+      + '<rect x="19" y="13" width="6" height="18" rx="3" fill="var(--hi)"/>'
+      + '<circle cx="22" cy="10.5" r="7" fill="var(--hi)" stroke="#fff" stroke-width="2.2"/>'
+      + '<circle cx="22" cy="33.5" r="7" fill="var(--hi)" stroke="#fff" stroke-width="2.2"/>'
+      + '</svg></div></div>',
+    iconSize:[44,44], iconAnchor:[22,22]
+  });
 }
 
 function drawRoutes(){
@@ -4726,8 +4726,21 @@ function onNavTouchMove(e){
 function onNavTouchEnd(e){
   if(e.touches.length < 2) navRotateGesture = null;
 }
+function navRotationDeg(heading){
+  return (navNorthUp ? 0 : -heading) + navManualRotOffset;
+}
+function updateMeMarkerRotation(heading, deg){
+  if(!navMeMarker) return;
+  const markerEl = navMeMarker.getElement();
+  const rot = markerEl && markerEl.querySelector('.navme-rot');
+  /* the marker rides inside the same rotated #map subtree as the tiles and
+     route, so it already tracks position correctly under pan/zoom/rotate —
+     this only cancels out that inherited rotation on the icon graphic
+     itself so it keeps pointing the way the rider is actually heading */
+  if(rot) rot.style.transform = 'rotate(' + (heading - deg) + 'deg)';
+}
 function applyMapRotation(heading){
-  const deg = (navNorthUp ? 0 : -heading) + navManualRotOffset;
+  const deg = navRotationDeg(heading);
   const mapEl = map && map.getContainer();
   /* heading-rotate happens first (innermost), the tilt is applied on top of
      that already-oriented flat plane, matching how the eye reads it: spin
@@ -4735,6 +4748,7 @@ function applyMapRotation(heading){
   if(mapEl) mapEl.style.transform = `rotateX(${NAV_TILT_DEG}deg) rotate(${deg}deg)`;
   const rose = el('compassRose');
   if(rose) rose.style.transform = 'rotate(' + deg + 'deg)';
+  updateMeMarkerRotation(heading, deg);
 }
 function setCue(msg){
   const c = el('navCue');
@@ -4858,11 +4872,13 @@ function startNav(R){
   updateSpeedo(null, 50);
   el('navSign').className = 'navsign';
   if(meMarker) map.removeLayer(meMarker);
+  if(navMeMarker){ map.removeLayer(navMeMarker); navMeMarker = null; }
 
   /* don't sit on the old fitRoute overview waiting for the first fix — the
      app already has a last-known position, so frame the drive around that
      immediately and correct it the moment a real fix lands */
   if(start){
+    navMeMarker = L.marker([start.lat, start.lon], {icon:navMeIcon(), interactive:false, zIndexOffset:600}).addTo(map);
     navProgrammaticMove = true;
     map.setView([start.lat, start.lon], Math.max(map.getZoom(), 17), {animate:false});
     applyMapRotation(navLastHeading);
@@ -4905,6 +4921,9 @@ function onNavFix(pos){
   navUsingGpsHeading = gpsHeading != null;
   const heading = gpsHeading != null ? gpsHeading : (navCompassHeading != null ? navCompassHeading : navLastHeading);
   navLastHeading = heading;
+  if(navMeMarker) navMeMarker.setLatLng([here.lat, here.lon]);
+  else navMeMarker = L.marker([here.lat, here.lon], {icon:navMeIcon(), interactive:false, zIndexOffset:600}).addTo(map);
+  updateMeMarkerRotation(heading, navRotationDeg(heading));
   if(navFollowing){
     navProgrammaticMove = true;
     applyMapRotation(heading);
@@ -4947,6 +4966,7 @@ function exitNav(){
     map.dragging.enable(); map.touchZoom.enable(); map.doubleClickZoom.enable();
     map.scrollWheelZoom.enable(); map.boxZoom.enable();
     if(map.tap) map.tap.enable();
+    if(navMeMarker){ map.removeLayer(navMeMarker); navMeMarker = null; }
   }
   if(start) placeMe(start);
   state = (navFrom === 'nav' || !navFrom) ? 'idle' : navFrom;
