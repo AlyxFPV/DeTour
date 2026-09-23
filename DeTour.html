@@ -1706,6 +1706,7 @@ en: {
 
   appDetourNav: "DeTour Navigation (Beta)",
   noteBuiltIn: "No hand-off needed",
+  compassDenied: "Turn on Motion & Orientation Access in Settings → Safari to let the map face the way you're pointed while stopped.",
   appGoogleMaps: "Google Maps",
   appWaze: "Waze",
   appAppleMaps: "Apple Maps",
@@ -1936,6 +1937,7 @@ ru: {
 
   appDetourNav: "Навигация DeTour (бета)",
   noteBuiltIn: "Передавать никуда не нужно",
+  compassDenied: "Включите доступ к движению и ориентации в Настройки → Safari, чтобы карта поворачивалась по вашей стороне на месте.",
   appGoogleMaps: "Google Maps",
   appWaze: "Waze",
   appAppleMaps: "Apple Maps",
@@ -2166,6 +2168,7 @@ et: {
 
   appDetourNav: "DeTour Navigatsioon (Beta)",
   noteBuiltIn: "Üleandmist pole vaja",
+  compassDenied: "Luba Seaded → Safari alt liikumis- ja suunaandmete juurdepääs, et kaart paigal seistes sinu poole pöörak.",
   appGoogleMaps: "Google Maps",
   appWaze: "Waze",
   appAppleMaps: "Apple Maps",
@@ -2735,6 +2738,10 @@ function initMap(){
   map.on('click', e => onMapTap({lat:e.latlng.lat, lon:e.latlng.lng}));
   map.on('dragstart', () => { if(state === 'nav') setNavFollowing(false); });
   map.on('zoomstart', () => { if(state === 'nav' && !navProgrammaticMove) setNavFollowing(false); });
+  map.getContainer().addEventListener('touchstart', onNavTouchStart, {passive:true});
+  map.getContainer().addEventListener('touchmove', onNavTouchMove, {passive:true});
+  map.getContainer().addEventListener('touchend', onNavTouchEnd, {passive:true});
+  map.getContainer().addEventListener('touchcancel', onNavTouchEnd, {passive:true});
   map.on('moveend', () => {
     clearTimeout(fuelFetchTimer);
     fuelFetchTimer = setTimeout(maybeFetchFuel, 500);
@@ -4696,8 +4703,31 @@ function setNavFollowing(v){
 }
 
 const NAV_TILT_DEG = 50;   // a real fly-over rake, camera looking down the road ahead
+let navManualRotOffset = 0;
+let navRotateGesture = null;   // {startAngle, startOffset} while two fingers are down
+function touchAngleDeg(t0, t1){
+  return Math.atan2(t1.clientY - t0.clientY, t1.clientX - t0.clientX) * 180 / Math.PI;
+}
+function onNavTouchStart(e){
+  if(state !== 'nav') return;
+  if(e.touches.length === 2){
+    setNavFollowing(false);
+    navRotateGesture = {startAngle:touchAngleDeg(e.touches[0], e.touches[1]), startOffset:navManualRotOffset};
+  } else {
+    navRotateGesture = null;
+  }
+}
+function onNavTouchMove(e){
+  if(state !== 'nav' || !navRotateGesture || e.touches.length !== 2) return;
+  const angle = touchAngleDeg(e.touches[0], e.touches[1]);
+  navManualRotOffset = navRotateGesture.startOffset + (angle - navRotateGesture.startAngle);
+  applyMapRotation(navLastHeading);
+}
+function onNavTouchEnd(e){
+  if(e.touches.length < 2) navRotateGesture = null;
+}
 function applyMapRotation(heading){
-  const deg = navNorthUp ? 0 : -heading;
+  const deg = (navNorthUp ? 0 : -heading) + navManualRotOffset;
   const mapEl = map && map.getContainer();
   /* heading-rotate happens first (innermost), the tilt is applied on top of
      that already-oriented flat plane, matching how the eye reads it: spin
@@ -4763,7 +4793,7 @@ function updateNavSign(limitKmh, sign){
   }
 }
 
-let navCompassHeading = null;
+let navCompassHeading = null, navUsingGpsHeading = false;
 function onDeviceOrientation(e){
   let h = null;
   if(typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)){
@@ -4771,7 +4801,15 @@ function onDeviceOrientation(e){
   } else if(e.absolute && typeof e.alpha === 'number'){
     h = (360 - e.alpha) % 360;                      // Android — alpha runs counter-clockwise
   }
-  if(h != null) navCompassHeading = h;
+  if(h == null) return;
+  navCompassHeading = h;
+  // GPS has no course of its own while stationary, so the compass is the
+  // only thing driving the view then — apply it the moment it changes
+  // rather than waiting for the next (possibly far-off) GPS fix
+  if(state === 'nav' && navFollowing && !navUsingGpsHeading){
+    navLastHeading = h;
+    applyMapRotation(h);
+  }
 }
 function requestCompassPermission(){
   try{
@@ -4783,8 +4821,10 @@ function requestCompassPermission(){
         if(state === 'granted'){
           window.addEventListener('deviceorientationabsolute', onDeviceOrientation, true);
           window.addEventListener('deviceorientation', onDeviceOrientation, true);
+        } else {
+          toast(t('compassDenied'));
         }
-      }).catch(() => {});
+      }).catch(() => toast(t('compassDenied')));
     } else {
       window.addEventListener('deviceorientationabsolute', onDeviceOrientation, true);
       window.addEventListener('deviceorientation', onDeviceOrientation, true);
@@ -4796,6 +4836,9 @@ function startNav(R){
   if(!navigator.geolocation){ toast(t('noGpsDevice')); return; }
   navFrom = state;
   navCompassHeading = null;
+  navUsingGpsHeading = false;
+  navManualRotOffset = 0;
+  navRotateGesture = null;
   requestCompassPermission();
   const built = buildManeuvers(R.pts);
   navRS = built.rs; navCum = built.cum; navManeuvers = built.maneuvers;
@@ -4857,9 +4900,10 @@ function onNavFix(pos){
   const now = Date.now();
   const here = {lat:pos.coords.latitude, lon:pos.coords.longitude};
 
-  const heading = (pos.coords.heading != null && !isNaN(pos.coords.heading)) ? pos.coords.heading
-                : (navPrevFix && haversine(navPrevFix, here) > 3 ? bearingTo(navPrevFix, here)
-                : (navCompassHeading != null ? navCompassHeading : navLastHeading));
+  const gpsHeading = (pos.coords.heading != null && !isNaN(pos.coords.heading)) ? pos.coords.heading
+                    : (navPrevFix && haversine(navPrevFix, here) > 3 ? bearingTo(navPrevFix, here) : null);
+  navUsingGpsHeading = gpsHeading != null;
+  const heading = gpsHeading != null ? gpsHeading : (navCompassHeading != null ? navCompassHeading : navLastHeading);
   navLastHeading = heading;
   if(navFollowing){
     navProgrammaticMove = true;
@@ -4913,6 +4957,7 @@ el('btnNavExit').onclick = exitNav;
 el('btnCompass').onclick = () => { navNorthUp = !navNorthUp; applyMapRotation(navLastHeading); };
 el('btnRecenter').onclick = () => {
   setNavFollowing(true);
+  navManualRotOffset = 0;
   if(navPrevFix){
     navProgrammaticMove = true;
     applyMapRotation(navLastHeading);
