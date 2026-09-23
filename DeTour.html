@@ -1809,6 +1809,7 @@ en: {
   navWaitingGpsLong: "Still waiting for GPS — check location access for this page",
   navWaitingGps: "Waiting for a GPS fix…",
   navOffRoute: "Off route — rejoin to keep guidance",
+  navRerouting: "Rerouting…",
   signStop: "STOP",
   signGiveWay: "GIVE WAY",
 
@@ -2042,6 +2043,7 @@ ru: {
   navWaitingGpsLong: "Всё ещё ждём GPS — проверьте доступ к геолокации для этой страницы",
   navWaitingGps: "Ждём фиксацию GPS…",
   navOffRoute: "Вне маршрута — вернитесь на него, чтобы продолжить навигацию",
+  navRerouting: "Прокладываем новый маршрут…",
   signStop: "STOP",
   signGiveWay: "УСТУПИ<br>ДОРОГУ",
 
@@ -2275,6 +2277,7 @@ et: {
   navWaitingGpsLong: "Ootame endiselt GPS-i — kontrolli selle lehe asukohaluba",
   navWaitingGps: "Ootame GPS-fiksatsiooni…",
   navOffRoute: "Marsruudilt väljas — naase juhiste jätkamiseks",
+  navRerouting: "Otsime uut marsruuti…",
   signStop: "STOP",
   signGiveWay: "ANNA<br>TEED",
 
@@ -4730,6 +4733,7 @@ let navFrom = 'idle', navWatchId = null, navArrived = false, navNorthUp = false;
 let navProgressIdx = 0, navManeuverCursor = 0;
 let navPrevFix = null, navLastHeading = 0;
 let navFollowing = true, navProgrammaticMove = false;
+let navDestPt = null, navOffRouteSince = null, navRerouting = false;
 function setNavFollowing(v){
   navFollowing = v;
   const btn = el('btnRecenter');
@@ -4949,6 +4953,7 @@ function startNav(R){
   const built = buildManeuvers(R.pts);
   navRS = built.rs; navCum = built.cum; navManeuvers = built.maneuvers;
   navManeuverCursor = 0; navProgressIdx = 0; navArrived = false; navNorthUp = false;
+  navDestPt = R.pts[R.pts.length - 1]; navOffRouteSince = null; navRerouting = false;
   navPrevFix = null; navLastHeading = 0;
   setNavFollowing(true);
   navWays = []; navSignEvents = [];
@@ -5000,6 +5005,34 @@ function startNav(R){
   });
 }
 
+async function rerouteNav(here){
+  navRerouting = true;
+  setCue(t('navRerouting'));
+  try{
+    const res = await osrmRoute([here, navDestPt], false, false);
+    if(state !== 'nav') return;
+    if(res.code !== 'Ok' || !res.routes || !res.routes.length) return;
+    const R = measure(res.routes[0]);
+    const built = buildManeuvers(R.pts);
+    navRS = built.rs; navCum = built.cum; navManeuvers = built.maneuvers;
+    navManeuverCursor = 0; navProgressIdx = 0;
+    if(routes[picked]) routes[picked] = R;
+    drawRoutes();
+    navWays = []; navSignEvents = [];
+    fetchRoadSigns(R.pts).then(r => {
+      if(state !== 'nav') return;
+      navWays = r.ways;
+      navSignEvents = buildSignEvents(navRS, navCum, r.nodes);
+    });
+    navOffRouteSince = null;
+    setCue(null);
+  }catch(err){
+    /* a failed reroute just leaves the old guidance in place; the next
+       off-route fix a few seconds later tries again on its own */
+  }finally{
+    navRerouting = false;
+  }
+}
 function onNavFixError(){
   if(state === 'nav' && !navPrevFix) setCue(t('navWaitingGps'));
 }
@@ -5029,7 +5062,16 @@ function onNavFix(pos){
     : (navPrevFix ? Math.max(0, (haversine(navPrevFix, here)/Math.max(0.5,(now-navPrevFix.t)/1000))*3.6) : null);
 
   const prog = updateProgress(here);
-  if(!navArrived) setCue(prog.offRouteM > 60 ? t('navOffRoute') : null);
+  if(!navArrived){
+    if(prog.offRouteM > 60){
+      if(navOffRouteSince == null) navOffRouteSince = now;
+      setCue(navRerouting ? t('navRerouting') : t('navOffRoute'));
+      if(!navRerouting && now - navOffRouteSince > 4000) rerouteNav(here);
+    } else {
+      navOffRouteSince = null;
+      setCue(null);
+    }
+  }
 
   const m = currentManeuver(prog.distAlong);
   updateBanner(m, prog.distAlong);
@@ -5050,6 +5092,7 @@ function onNavFix(pos){
 
 function exitNav(){
   if(navWatchId != null){ navigator.geolocation.clearWatch(navWatchId); navWatchId = null; }
+  navOffRouteSince = null; navRerouting = false;
   window.removeEventListener('deviceorientationabsolute', onDeviceOrientation, true);
   window.removeEventListener('deviceorientation', onDeviceOrientation, true);
   navCompassHeading = null;
