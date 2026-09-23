@@ -4888,7 +4888,7 @@ function startNav(R){
   if(start){
     navMeMarker = L.marker([start.lat, start.lon], {icon:navMeIcon(), interactive:false, zIndexOffset:600}).addTo(map);
     navProgrammaticMove = true;
-    map.setView([start.lat, start.lon], Math.max(map.getZoom(), 17), {animate:false});
+    map.setView([start.lat, start.lon], Math.max(map.getZoom(), 18), {animate:false});
     applyMapRotation(navLastHeading);
     navProgrammaticMove = false;
   }
@@ -4935,7 +4935,7 @@ function onNavFix(pos){
   if(navFollowing){
     navProgrammaticMove = true;
     applyMapRotation(heading);
-    map.setView([here.lat, here.lon], Math.max(map.getZoom(), 17), {animate:true});
+    map.setView([here.lat, here.lon], Math.max(map.getZoom(), 18), {animate:true});
     navProgrammaticMove = false;
   }
 
@@ -4989,7 +4989,7 @@ el('btnRecenter').onclick = () => {
   if(navPrevFix){
     navProgrammaticMove = true;
     applyMapRotation(navLastHeading);
-    map.setView([navPrevFix.lat, navPrevFix.lon], Math.max(map.getZoom(), 17), {animate:true});
+    map.setView([navPrevFix.lat, navPrevFix.lon], Math.max(map.getZoom(), 18), {animate:true});
     navProgrammaticMove = false;
   }
 };
