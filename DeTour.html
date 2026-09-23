@@ -4704,15 +4704,26 @@ function setNavFollowing(v){
 
 const NAV_TILT_DEG = 50;   // a real fly-over rake, camera looking down the road ahead
 let navManualRotOffset = 0;
-let navRotateGesture = null;   // {startAngle, startOffset} while two fingers are down
+let navRotateGesture = null;   // {startAngle, startOffset, startDist, startZoom} while two fingers are down
 function touchAngleDeg(t0, t1){
   return Math.atan2(t1.clientY - t0.clientY, t1.clientX - t0.clientX) * 180 / Math.PI;
+}
+function touchDist(t0, t1){
+  return Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
 }
 function onNavTouchStart(e){
   if(state !== 'nav') return;
   if(e.touches.length === 2){
     setNavFollowing(false);
-    navRotateGesture = {startAngle:touchAngleDeg(e.touches[0], e.touches[1]), startOffset:navManualRotOffset};
+    navRotateGesture = {
+      startAngle:touchAngleDeg(e.touches[0], e.touches[1]), startOffset:navManualRotOffset,
+      startDist:touchDist(e.touches[0], e.touches[1]), startZoom:map.getZoom()
+    };
+    /* Leaflet's own pinch-zoom reads finger position against #map's
+       perspective-tilted on-screen shape, which sends its zoom math
+       haywire during nav, so drive zoom ourselves from the raw touch
+       points instead and keep its native handler out of the way */
+    map.touchZoom.disable();
   } else {
     navRotateGesture = null;
   }
@@ -4721,10 +4732,17 @@ function onNavTouchMove(e){
   if(state !== 'nav' || !navRotateGesture || e.touches.length !== 2) return;
   const angle = touchAngleDeg(e.touches[0], e.touches[1]);
   navManualRotOffset = navRotateGesture.startOffset + (angle - navRotateGesture.startAngle);
+  const dist = touchDist(e.touches[0], e.touches[1]);
+  const ratio = Math.max(dist, 1) / Math.max(navRotateGesture.startDist, 1);
+  const zoom = Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), navRotateGesture.startZoom + Math.log2(ratio)));
+  map.setZoom(zoom, {animate:false});
   applyMapRotation(navLastHeading);
 }
 function onNavTouchEnd(e){
-  if(e.touches.length < 2) navRotateGesture = null;
+  if(e.touches.length < 2){
+    navRotateGesture = null;
+    map.touchZoom.enable();
+  }
 }
 function navRotationDeg(heading){
   return (navNorthUp ? 0 : -heading) + navManualRotOffset;
@@ -4734,8 +4752,8 @@ function updateMeMarkerRotation(heading, deg){
   const markerEl = navMeMarker.getElement();
   const rot = markerEl && markerEl.querySelector('.navme-rot');
   /* the marker rides inside the same rotated #map subtree as the tiles and
-     route, so it already tracks position correctly under pan/zoom/rotate —
-     this only cancels out that inherited rotation on the icon graphic
+     route, so it already tracks position correctly under pan/zoom/rotate.
+     This only cancels out that inherited rotation on the icon graphic
      itself so it keeps pointing the way the rider is actually heading */
   if(rot) rot.style.transform = 'rotate(' + (heading - deg) + 'deg)';
 }
