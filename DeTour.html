@@ -1291,7 +1291,7 @@ h1{
 
 .navrecenter{
   display:none; position:absolute; z-index:600;
-  left:14px; bottom:calc(100px + env(safe-area-inset-bottom));
+  left:14px; bottom:calc(152px + env(safe-area-inset-bottom));
   width:44px; height:44px; border-radius:50%;
   background:var(--hi); border:1px solid var(--line); box-shadow:var(--card-shadow);
   align-items:center; justify-content:center;
@@ -1301,7 +1301,7 @@ h1{
 
 .navsign{
   display:none; position:absolute; z-index:600;
-  left:94px; bottom:calc(14px + env(safe-area-inset-bottom));
+  left:29px; bottom:calc(100px + env(safe-area-inset-bottom));
   width:42px; height:42px; border-radius:50%;
   background:#fff; border:3px solid var(--danger); box-shadow:var(--card-shadow);
   align-items:center; justify-content:center;
@@ -4818,15 +4818,17 @@ function onNavTouchEnd(e){
 function navRotationDeg(heading){
   return (navNorthUp ? 0 : -heading) + navManualRotOffset;
 }
-function updateMeMarkerRotation(heading, deg){
+function updateMeMarkerRotation(heading){
   if(!navMeMarker) return;
   const markerEl = navMeMarker.getElement();
   const rot = markerEl && markerEl.querySelector('.navme-rot');
   /* the marker rides inside the same rotated #map subtree as the tiles and
      route, so it already tracks position correctly under pan/zoom/rotate.
-     This only cancels out that inherited rotation on the icon graphic
-     itself so it keeps pointing the way the rider is actually heading */
-  if(rot) rot.style.transform = 'rotate(' + (heading - deg) + 'deg)';
+     It also lives in that subtree's own unrotated local frame, where "up"
+     already means true north, same as the road underneath it. So pointing
+     it straight at the current heading is enough; the map's own rotation
+     carries it to the right spot on screen from there automatically */
+  if(rot) rot.style.transform = 'rotate(' + heading + 'deg)';
 }
 function applyMapRotation(heading){
   const deg = navRotationDeg(heading);
@@ -4837,7 +4839,7 @@ function applyMapRotation(heading){
   if(mapEl) mapEl.style.transform = `rotateX(${NAV_TILT_DEG}deg) rotate(${deg}deg)`;
   const rose = el('compassRose');
   if(rose) rose.style.transform = 'rotate(' + deg + 'deg)';
-  updateMeMarkerRotation(heading, deg);
+  updateMeMarkerRotation(heading);
 }
 function setCue(msg){
   const c = el('navCue');
@@ -5014,7 +5016,7 @@ function onNavFix(pos){
   navLastHeading = heading;
   if(navMeMarker) navMeMarker.setLatLng([here.lat, here.lon]);
   else navMeMarker = L.marker([here.lat, here.lon], {icon:navMeIcon(), interactive:false, zIndexOffset:600}).addTo(map);
-  updateMeMarkerRotation(heading, navRotationDeg(heading));
+  updateMeMarkerRotation(heading);
   if(navFollowing){
     navProgrammaticMove = true;
     applyMapRotation(heading);
