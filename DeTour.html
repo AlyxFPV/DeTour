@@ -1331,6 +1331,16 @@ h1{
 }
 .navend.on{display:block}
 
+.navendbtn{
+  display:none; position:absolute; z-index:650; left:50%; bottom:calc(24px + env(safe-area-inset-bottom));
+  transform:translateX(-50%);
+  background:var(--panel); border:1px solid var(--line); box-shadow:var(--card-shadow);
+  border-radius:999px; padding:13px 26px;
+  font-family:"Barlow Condensed",Arial Narrow,sans-serif;
+  font-size:15px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--danger);
+}
+#phone.nav-on .navendbtn{display:block}
+
 @media (prefers-reduced-motion: reduce){
   *{transition-duration:.01ms !important; animation-duration:.01ms !important}
 }
@@ -1374,6 +1384,7 @@ h1{
 
   <div class="navcue" id="navCue"></div>
   <div class="navend" id="navEnd">Arrived</div>
+  <button class="navendbtn" id="btnEndTrip" type="button">End trip</button>
 
   <div class="topbar">
     <div class="trow">
@@ -1597,6 +1608,7 @@ en: {
   gettingFix: "Getting a fix…",
   compassAria: "Compass — tap to face north",
   arrived: "Arrived",
+  endTrip: "End trip",
   currentTime: "Current time",
   weatherHere: "Weather here",
   locationStatus: "Location status",
@@ -1829,6 +1841,7 @@ ru: {
   gettingFix: "Определяем местоположение…",
   compassAria: "Компас — нажмите, чтобы повернуть на север",
   arrived: "Прибыли",
+  endTrip: "Завершить поездку",
   currentTime: "Текущее время",
   weatherHere: "Погода здесь",
   locationStatus: "Статус местоположения",
@@ -2061,6 +2074,7 @@ et: {
   gettingFix: "Otsime asukohta…",
   compassAria: "Kompass — puuduta, et pöörata põhja poole",
   arrived: "Kohal",
+  endTrip: "Lõpeta sõit",
   currentTime: "Praegune kellaaeg",
   weatherHere: "Ilm siin",
   locationStatus: "Asukoha olek",
@@ -3506,6 +3520,7 @@ function applyStaticText(){
   el('navInstr').textContent = t('gettingFix');
   el('btnCompass').setAttribute('aria-label', t('compassAria'));
   el('navEnd').textContent = t('arrived');
+  el('btnEndTrip').textContent = t('endTrip');
   const clockEl = document.querySelector('.clock');
   if(clockEl) clockEl.setAttribute('aria-label', t('currentTime'));
   el('weatherChip').setAttribute('aria-label', t('weatherHere'));
@@ -4904,6 +4919,7 @@ function startNav(R){
   if(map) map.invalidateSize(false);
   setCue(null);
   el('navEnd').classList.remove('on');
+  el('btnEndTrip').style.display = '';
   el('navDist').textContent = '—';
   el('navInstr').textContent = t('gettingFix');
   el('navManeuverIcon').innerHTML = `<svg viewBox="0 0 24 24">${NAV_ICONS.straight}</svg>`;
@@ -4987,6 +5003,7 @@ function onNavFix(pos){
     navArrived = true;
     setCue(null);
     el('navEnd').classList.add('on');
+    el('btnEndTrip').style.display = 'none';
     setTimeout(() => { if(state === 'nav') exitNav(); }, 4500);
   }
   navPrevFix = {lat:here.lat, lon:here.lon, t:now};
@@ -5012,6 +5029,7 @@ function exitNav(){
   if(routes[picked]){ drawRoutes(); fitRoute(); }
 }
 el('btnNavExit').onclick = exitNav;
+el('btnEndTrip').onclick = exitNav;
 el('btnCompass').onclick = () => { navNorthUp = !navNorthUp; applyMapRotation(navLastHeading); };
 el('btnRecenter').onclick = () => {
   setNavFollowing(true);
