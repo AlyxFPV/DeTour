@@ -1226,7 +1226,6 @@ h1{
 #phone.nav-on{perspective:1400px}
 #phone.nav-on #map{
   width:360%; height:360%; left:-130%; top:-130%;
-  transition:transform .25s linear;
   transform-origin:50% 50%;
 }
 .navbanner{
@@ -1256,7 +1255,7 @@ h1{
 .navbanner .nx svg{width:15px;height:15px;stroke:var(--ink2);fill:none;stroke-width:2.3;stroke-linecap:round}
 
 .navme{width:44px; height:44px; pointer-events:none}
-.navme-rot{width:100%; height:100%; transition:transform .12s linear}
+.navme-rot{width:100%; height:100%}
 .navme-rot svg{width:100%;height:100%; filter:drop-shadow(0 3px 8px rgba(10,14,10,.4))}
 
 .compass{
@@ -4833,10 +4832,11 @@ function onDeviceOrientation(e){
   }
   if(h == null) return;
   navCompassHeading = h;
-  // GPS has no course of its own while stationary, so the compass is the
-  // only thing driving the view then — apply it the moment it changes
-  // rather than waiting for the next (possibly far-off) GPS fix
-  if(state === 'nav' && navFollowing && !navUsingGpsHeading){
+  // the compass fires far more often than GPS delivers fixes, so let it
+  // drive the live view continuously instead of waiting on each (sparse)
+  // GPS update. onNavFix still nudges navLastHeading back onto the GPS
+  // course whenever a fix lands, so this never drifts for long
+  if(state === 'nav' && navFollowing){
     navLastHeading = h;
     applyMapRotation(h);
   }
